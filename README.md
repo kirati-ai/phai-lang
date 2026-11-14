@@ -1,4 +1,19 @@
-<p align="center"><img src="assets/brand/apsi-logo-transparent.png" alt="Apsi" width="220"></p>
+# Phai Lang
+
+**Phai Lang is based on Apsi, originally developed by ATEC** — https://github.com/ATECTechnologies/apsi ·
+Apsi License 2.0 (see [`LICENSE`](LICENSE)). Phai Lang is not the official Apsi and is not endorsed by ATEC.
+
+**Changed by Kirati Kittikhun.** Changes from Apsi so far:
+
+- `app.static("/", dir)` serves a whole site from the root path (it never matched before)
+- SI prefixes on `pc` and `yr`: `kpc`, `Mpc`, `Myr`, `Gyr`
+- a struct brought in with `import "file.apsi"` can be named in type annotations (`fn f(b: Box)`)
+- demos in [`construction/`](construction): room material calculator, room 3D viewer, colour-mixing balls in
+  space, colliding galaxies (all with three.js)
+
+The command is still `apsi` and the rest of this README is the original Apsi documentation.
+
+---
 
 <p align="center"><strong>A programming language for AI, physics and servers — that reads like Python and checks your work before it runs.</strong></p>
 
