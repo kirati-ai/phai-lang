@@ -1,0 +1,24 @@
+# bench.apsi — วัดเวลาต่อช่วง: โหมดธรรมดา vs native ทุกคอร์
+# รัน: apsi.bat run construction\galaxy\bench.apsi [จำนวนดาว] [จำนวนช่วง]
+import "sim.apsi"
+
+let a = args()
+let n = int(a[0]) if len(a) > 0 else 2000
+let steps = int(a[1]) if len(a) > 1 else 20
+print(f"ดาว {n} ดวง · {n * n / 1e6:.0f} ล้านคู่ต่อช่วง · {native_threads()} คอร์")
+print(f"เวลา 1 หน่วย = {myr(1.0):.3f} ล้านปี · ความเร็ว 1 หน่วย = {(SPEED_UNIT as [km/s]).magnitude:.0f} กม./วินาที")
+
+let fast = new_universe(n, true)
+advance(fast, 0.04, 1)                                   # รอบแรกรวมเวลาคอมไพล์ → ไม่นับ
+let t0 = clock()
+advance(fast, 0.04, steps)
+let ms_fast = (clock() - t0).value * 1000 / steps
+print(f"  native: {ms_fast:.1f} ms/ช่วง · {n * n / (ms_fast / 1000) / 1e9:.2f} พันล้านคู่ต่อวินาที")
+print(f"  พลังงานคลาดเคลื่อน {energy_drift(fast) * 100:.4f}% หลัง {steps + 1} ช่วง")
+
+if n <= 4000:
+    let slow = new_universe(n, false)
+    let t1 = clock()
+    advance(slow, 0.04, 1)
+    let ms_slow = (clock() - t1).value * 1000
+    print(f"  ธรรมดา: {ms_slow:.0f} ms/ช่วง · เร็วขึ้น {ms_slow / ms_fast:.0f} เท่า")

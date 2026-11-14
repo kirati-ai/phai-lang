@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>กาแล็กซีชนกัน</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="view"></div>
+<div class="panel">
+  <h1>กาแล็กซีชนกัน</h1>
+  <div class="row" id="sizes">
+    <button data-total="2000">2,000</button>
+    <button data-total="5000" class="on">5,000</button>
+    <button data-total="10000">10,000</button>
+    <button data-total="20000">20,000</button>
+  </div>
+  <div class="row">
+    <button id="mode" class="on">⚡ native ทุกคอร์</button>
+    <button id="reset">เริ่มใหม่</button>
+    <button id="full" class="icon" title="เต็มจอ">⛶</button>
+  </div>
+  <table>
+    <tr><td>ดาว</td><td id="s-n">–</td></tr>
+    <tr><td>แรงดึงที่คิดต่อเฟรม</td><td id="s-pairs">–</td></tr>
+    <tr><td>apsi คำนวณต่อเฟรม</td><td id="s-ms">–</td></tr>
+    <tr><td>เฟรมต่อวินาที</td><td id="s-fps">–</td></tr>
+    <tr><td>เวลาในจักรวาล</td><td id="s-t">–</td></tr>
+    <tr><td>พลังงานคลาดเคลื่อน</td><td id="s-e">–</td></tr>
+  </table>
+  <div class="legend"><span class="a"></span>กาแล็กซี A <span class="b"></span>กาแล็กซี B · ดาวทุกดวงดึงทุกดวง</div>
+  <div class="err" id="err"></div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+# galaxy/server.apsi — กาแล็กซีสองวงชนกัน: apsi จำลองแรงโน้มถ่วง · three.js วาด
+# รันจากโฟลเดอร์หลักของ repo:
+#   apsi.bat run construction\galaxy\server.apsi --allow-net --allow-read=public
+# แล้วเปิด http://127.0.0.1:8092/
+use web
+import "sim.apsi"
+
+let SIZES = [2000, 5000, 10000, 20000]
+let SLOW_LIMIT = 2000           # โหมดธรรมดาเปิดได้แค่ 2,000 ดวง (10 วินาทีต่อช่วง · 20,000 ดวงจะกินเป็นชั่วโมง)
+let DT = 0.04                   # 1 ช่วง ≈ 0.06 ล้านปี
+let ENERGY_EVERY = 30           # ตรวจพลังงานทุก 30 เฟรม (คิดพลังงาน = หนักเท่าเดิน 1 ช่วง)
+
+# เฟรมไบนารี: หัว float32 × 6 = [จำนวนดาว, เวลาคำนวณ ms, ล้านปีที่ผ่านไป, พลังงานคลาดเคลื่อน %, native 1/0, ล้านคู่ต่อช่วง]
+#             ตามด้วยตำแหน่ง float32 × 3 ต่อดาว (ครึ่งแรก = กาแล็กซี A · ครึ่งหลัง = B · ดวงท้ายของแต่ละครึ่ง = แกนกลาง)
+fn frame_bytes(u, ms: Float, drift_pct: Float):
+    let head = tensor([float(u.n), ms, myr(u.t), drift_pct, 1.0 if u.native else 0.0, u.n * u.n / 1e6], dtype="float32")
+    return head.tobytes() + tensor(u.pos, dtype="float32").tobytes()
+
+let app = server(name="galaxy", max_body=4096)
+
+@app.websocket("/ws", max_message=4096)
+fn play(ws):
+    var u = new_universe(5000, true)
+    var frames = 0
+    var drift_pct = 0.0
+    var seed = 1
+    for msg in ws:
+        let m = json_parse(msg)
+        let cmd = m["cmd"]
+        if cmd == "reset":
+            let n = int(m["total"])
+            if n not in SIZES:
+                ws.close(1008, "จำนวนดาวไม่ถูกต้อง")
+                return
+            seed += 2
+            u = new_universe(n, bool(m["native"]) or n > SLOW_LIMIT, seed)
+            frames = 0
+            drift_pct = 0.0
+            ws.send(frame_bytes(u, 0.0, 0.0))
+        elif cmd == "mode":
+            u.native = bool(m["native"]) or u.n > SLOW_LIMIT
+        elif cmd == "frame":
+            let t0 = clock()
+            advance(u, DT, 1)
+            let ms = (clock() - t0).value * 1000
+            frames += 1
+            if frames % ENERGY_EVERY == 0:
+                drift_pct = energy_drift(u) * 100
+            ws.send(frame_bytes(u, ms, drift_pct))
+
+app.static("/app", "public")             # app.static("/") ใช้ไม่ได้ใน apsi 2.6.0 → วางที่ /app
+
+@app.get("/")
+fn home(req) = redirect("/app/")
+
+fn allow_page(req, resp):
+    if req.path.startswith("/app"):
+        resp.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' ws://127.0.0.1:8092 ws://localhost:8092; frame-ancestors 'none'"
+        resp.headers["Cache-Control"] = "no-cache"
+app.after(allow_page)
+
+test "หน่วยจริง: เวลา 1 หน่วย ≈ 1.49 ล้านปี · ความเร็ว 1 หน่วย ≈ 656 กม./วินาที":
+    assert abs(myr(1.0) - 1.491) < 0.001
+    assert abs((SPEED_UNIT as [km/s]).magnitude - 655.8) < 0.5
+
+test "native กับโหมดธรรมดาได้ผลเท่ากันเป๊ะ":
+    let a = new_universe(300, true, 5)
+    let b = new_universe(300, false, 5)
+    advance(a, DT, 3)
+    advance(b, DT, 3)
+    assert max(abs(a.pos - b.pos)) == 0.0
+    assert max(abs(a.vel - b.vel)) == 0.0
+
+test "พลังงานรวมคงที่: 300 ช่วง (~18 ล้านปี) คลาดเคลื่อนไม่เกิน 0.5%":
+    let u = new_universe(2000, true, 7)
+    advance(u, DT, 300)
+    assert energy_drift(u) < 0.005
+
+test "แรงโน้มถ่วงตรงสูตรนิวตัน: ดาวสองดวงห่าง 1 ดึงกันด้วย m / (r² + ε²)^1.5 · r":
+    let pos = tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    let mass = tensor([2.0, 3.0])
+    let acc = zeros(2, 3)
+    accel_native(pos, mass, acc, 2, EPS2)
+    let expect = 1.0 / (1.0 + EPS2) ** 1.5
+    assert abs(acc[0, 0] - 3.0 * expect) < 1e-12
+    assert abs(acc[1, 0] + 2.0 * expect) < 1e-12
+    assert abs(mass[0] * acc[0, 0] + mass[1] * acc[1, 0]) < 1e-12     # แรงคู่ ดึงเท่ากัน ทิศตรงข้าม (กฎข้อ 3)
+
+if testing():
+    pass
+elif "net" not in permissions():
+    print("รันด้วย --allow-net --allow-read=public เพื่อเปิดเซิร์ฟเวอร์")
+else:
+    print(f"เปิด http://127.0.0.1:8092/  ({native_threads()} คอร์)")
+    app.run(host="127.0.0.1", port=8092, workers=4)

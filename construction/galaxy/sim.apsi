@@ -1,0 +1,185 @@
+# sim.apsi — กาแล็กซีจานสองวงชนกัน (N-body: ดาวทุกดวงดึงทุกดวง ไม่ตัดทอน)
+#
+# หน่วยของการจำลอง (ตั้งให้ G = 1 แล้วแปลงกลับเป็นหน่วยจริงด้วยตัวตรวจหน่วยของ apsi):
+#   ความยาว 1 = 1 กิโลพาร์เซก · มวล 1 = แสนล้านเท่าดวงอาทิตย์ (มวลกาแล็กซี 1 วง)
+#   → เวลา 1 = sqrt(L³ / G M) ≈ 1.49 ล้านปี · ความเร็ว 1 ≈ 656 กม./วินาที (คำนวณจริงข้างล่าง ไม่ได้พิมพ์เลขเอง)
+#
+# วิธีเดิน: leapfrog (เตะ-เดิน-เตะ) — วิธีมาตรฐานของงานดาราศาสตร์ พลังงานไม่ไหลหนีระยะยาว
+# ทุกฟังก์ชันเขียนครั้งเดียว: โหมดธรรมดาเรียกตรง ๆ · โหมด native เรียกผ่านตัวห่อ @native
+use physics.constants
+
+let KPC        = 1000[pc]                          # apsi ไม่มีหน่วย kpc ในตัว
+let MASS_UNIT  = 1e11 * M_sun
+let TIME_UNIT  = sqrt(KPC ** 3 / (G * MASS_UNIT))  # หน่วย: วินาที (ตัวตรวจหน่วยยืนยันว่าเป็นเวลา)
+let SPEED_UNIT = KPC / TIME_UNIT
+
+fn myr(t_sim: Float) -> Float = (t_sim * TIME_UNIT as [yr]).magnitude / 1e6   # apsi ไม่มีหน่วยล้านปี
+
+let SOFTENING = 0.12        # ระยะนุ่ม (กิโลพาร์เซก) — กันแรงพุ่งไม่จำกัดตอนดาวสองดวงเฉียดกันมาก
+let CORE_FRACTION = 0.3     # มวลแกนกลาง (ป่องกลาง + หลุมดำ) 30% ของกาแล็กซี
+let DISK_SCALE = 1.6        # ความยาวสเกลของจานดาว (กิโลพาร์เซก)
+
+# ---------- แรงโน้มถ่วง: ดาวทุกดวงดึงทุกดวง (N² คู่) ----------
+fn accel(pos, mass, acc, n: Int, eps2: Float):
+    parallel for i in 0..n:
+        var ax = 0.0
+        var ay = 0.0
+        var az = 0.0
+        let xi = pos[i, 0]
+        let yi = pos[i, 1]
+        let zi = pos[i, 2]
+        for j in 0..n:
+            let dx = pos[j, 0] - xi
+            let dy = pos[j, 1] - yi
+            let dz = pos[j, 2] - zi
+            let r2 = dx * dx + dy * dy + dz * dz + eps2    # j == i ได้ dx=dy=dz=0 → ไม่มีแรง ไม่ต้องข้าม
+            let inv = 1.0 / (r2 * sqrt(r2))
+            let f = mass[j] * inv
+            ax += f * dx
+            ay += f * dy
+            az += f * dz
+        acc[i, 0] = ax
+        acc[i, 1] = ay
+        acc[i, 2] = az
+
+# leapfrog 1 ช่วง: เตะครึ่ง → เดินเต็ม → คิดแรงใหม่ → เตะครึ่ง
+fn kick(vel, acc, n: Int, h: Float):
+    parallel for i in 0..n:
+        for a in 0..3:
+            vel[i, a] += acc[i, a] * h
+
+fn drift(pos, vel, n: Int, dt: Float):
+    parallel for i in 0..n:
+        for a in 0..3:
+            pos[i, a] += vel[i, a] * dt
+
+# ---------- พลังงานรวม (จลน์ + ศักย์) — ใช้วัดว่าการจำลองแม่นแค่ไหน ----------
+fn energy(pos, vel, mass, n: Int, eps2: Float) -> Float:
+    var kin = 0.0
+    var pot = 0.0
+    parallel for i in 0..n:
+        kin += 0.5 * mass[i] * (vel[i, 0] * vel[i, 0] + vel[i, 1] * vel[i, 1] + vel[i, 2] * vel[i, 2])
+        var p = 0.0
+        for j in (i + 1)..n:
+            let dx = pos[j, 0] - pos[i, 0]
+            let dy = pos[j, 1] - pos[i, 1]
+            let dz = pos[j, 2] - pos[i, 2]
+            p -= mass[j] / sqrt(dx * dx + dy * dy + dz * dz + eps2)
+        pot += mass[i] * p
+    return kin + pot
+
+# ---------- สร้างกาแล็กซีจาน 1 วง ----------
+fn next_rand(x: Int) -> Int = (x * 1103515245 + 12345) % 2147483648
+fn uni(x: Int) -> Float = (x + 0.5) / 2147483648.0                 # 0 .. 1 (ไม่แตะ 0 พอดี → log ปลอดภัย)
+
+# ดาว first..first+count-1 = จาน · ดาว core = แกนกลาง · tilt = เอียงจานรอบแกน x (เรเดียน)
+fn make_disk(pos, vel, mass, first: Int, count: Int, core: Int,
+             cx: Float, cy: Float, cz: Float, vx: Float, vy: Float, vz: Float,
+             tilt: Float, spin: Float, seed: Int):
+    let m_core = CORE_FRACTION
+    let m_disk = 1.0 - CORE_FRACTION
+    let h = DISK_SCALE
+    var s = seed * 7919 + 101
+    pos[core, 0] = cx
+    pos[core, 1] = cy
+    pos[core, 2] = cz
+    vel[core, 0] = vx
+    vel[core, 1] = vy
+    vel[core, 2] = vz
+    mass[core] = m_core
+    let ct = cos(tilt)
+    let st = sin(tilt)
+    for k in 0..count:
+        let i = first + k
+        s = next_rand(s)
+        let u1 = uni(s)
+        s = next_rand(s)
+        let u2 = uni(s)
+        s = next_rand(s)
+        let ang = uni(s) * 2 * pi
+        s = next_rand(s)
+        let uz = uni(s) - 0.5
+        let r = min(-h * log(u1 * u2), 6 * h)          # จานเลขชี้กำลัง: หนาแน่นกลาง บางขอบ
+        let x = r * cos(ang)
+        let y = r * sin(ang)
+        let z = uz * 0.12 * h
+        # ความเร็ววงกลมจากมวลข้างใน (แกน + จานส่วนที่อยู่ใน r)
+        let m_in = m_core + m_disk * (1 - (1 + r / h) * exp(-r / h))
+        let vc = sqrt(m_in * r * r / (r * r + SOFTENING * SOFTENING) ** 1.5)
+        let ux = -sin(ang) * vc * spin
+        let uy = cos(ang) * vc * spin
+        # เอียงจานรอบแกน x แล้ววางที่ตำแหน่งของกาแล็กซี
+        pos[i, 0] = cx + x
+        pos[i, 1] = cy + y * ct - z * st
+        pos[i, 2] = cz + y * st + z * ct
+        vel[i, 0] = vx + ux
+        vel[i, 1] = vy + uy * ct
+        vel[i, 2] = vz + uy * st
+        mass[i] = m_disk / count
+
+# ---------- ตัวห่อ native: ฟังก์ชันเดียวกันทุกบรรทัด ----------
+@native
+fn accel_native(pos, mass, acc, n: Int, eps2: Float):
+    accel(pos, mass, acc, n, eps2)
+# ลองแล้ว 14/11: @native("fast") และแยก x/y/z เป็น 3 tensor เร็วขึ้นไม่ถึง 20% บนเครื่องนี้ → ใช้ native ปกติ (ตรวจครบ)
+
+@native
+fn kick_native(vel, acc, n: Int, h: Float):
+    kick(vel, acc, n, h)
+
+@native
+fn drift_native(pos, vel, n: Int, dt: Float):
+    drift(pos, vel, n, dt)
+
+@native
+fn energy_native(pos, vel, mass, n: Int, eps2: Float) -> Float = energy(pos, vel, mass, n, eps2)
+
+@native
+fn make_disk_native(pos, vel, mass, first: Int, count: Int, core: Int,
+                    cx: Float, cy: Float, cz: Float, vx: Float, vy: Float, vz: Float,
+                    tilt: Float, spin: Float, seed: Int):
+    make_disk(pos, vel, mass, first, count, core, cx, cy, cz, vx, vy, vz, tilt, spin, seed)
+
+# ---------- จักรวาล 1 ชุด: กาแล็กซี A (ดาวครึ่งแรก) พุ่งเข้าหา B (ครึ่งหลัง) ----------
+# ลำดับดาว: A จาน 0..half-2 · A แกน half-1 · B จาน half..n-2 · B แกน n-1
+struct Universe:
+    n: Int
+    native: Bool
+    t: Float
+    e0: Float
+    pos: Tensor
+    vel: Tensor
+    acc: Tensor
+    mass: Tensor
+
+let EPS2 = SOFTENING * SOFTENING
+
+fn new_universe(n: Int, native: Bool, seed: Int = 1) -> Universe:
+    let half = n // 2
+    let u = Universe(n, native, 0.0, 0.0, zeros(n, 3), zeros(n, 3), zeros(n, 3), zeros(n))
+    # วงโคจรเข้าหากันแบบเฉียด (ห่าง 24 กิโลพาร์เซก เยื้อง 5) · ความเร็วต่ำกว่าหลุดพ้น → ชนแล้วรวมเป็นวงเดียว
+    make_disk_native(u.pos, u.vel, u.mass, 0, half - 1, half - 1, -12.0, -2.5, 0.0, 0.16, 0.0, 0.0, 0.0, 1.0, seed)
+    make_disk_native(u.pos, u.vel, u.mass, half, n - half - 1, n - 1, 12.0, 2.5, 0.0, -0.16, 0.0, 0.0, 1.0, -1.0, seed + 1)
+    accel_native(u.pos, u.mass, u.acc, n, EPS2)
+    u.e0 = energy_native(u.pos, u.vel, u.mass, n, EPS2)
+    return u
+
+# เดิน steps ช่วง ช่วงละ dt (หน่วยจำลอง)
+fn advance(u: Universe, dt: Float, steps: Int):
+    for s in 0..steps:
+        if u.native:
+            kick_native(u.vel, u.acc, u.n, dt * 0.5)
+            drift_native(u.pos, u.vel, u.n, dt)
+            accel_native(u.pos, u.mass, u.acc, u.n, EPS2)
+            kick_native(u.vel, u.acc, u.n, dt * 0.5)
+        else:
+            kick(u.vel, u.acc, u.n, dt * 0.5)
+            drift(u.pos, u.vel, u.n, dt)
+            accel(u.pos, u.mass, u.acc, u.n, EPS2)
+            kick(u.vel, u.acc, u.n, dt * 0.5)
+        u.t += dt
+
+# พลังงานคลาดเคลื่อนจากตอนเริ่ม (เศษส่วน · 0.001 = 0.1%)
+fn energy_drift(u: Universe) -> Float:
+    let e = energy_native(u.pos, u.vel, u.mass, u.n, EPS2) if u.native else energy(u.pos, u.vel, u.mass, u.n, EPS2)
+    return abs((e - u.e0) / u.e0)
