@@ -558,10 +558,11 @@ class Interpreter:
                 shadow = f"apsi_{abs(hash(getattr(interp, '_main_dir', '') or '')):x}."
                 rel = name[len(shadow):] if name.startswith(shadow) else name   # a library under its private name
                 base = os.path.join(root, *rel.split("."))
-                for cand in (base + ".apsi", os.path.join(base, "__init__.apsi")):
+                from .sources import module_candidates, is_package_init
+                for cand in module_candidates(base):
                     if os.path.isfile(cand):
                         return importlib.machinery.ModuleSpec(name, _Loader(cand), origin=cand,
-                                                              is_package=cand.endswith("__init__.apsi"))
+                                                              is_package=is_package_init(cand))
                 return None
 
         class _Loader:

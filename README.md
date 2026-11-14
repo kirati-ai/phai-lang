@@ -1,4 +1,11 @@
+<p align="center"><img src="assets/brand/phai-lang-icon.svg" alt="Phai Lang" width="128"></p>
+
 # Phai Lang
+
+```text
+Based on Apsi, originally developed by ATEC — https://github.com/ATECTechnologies/apsi
+Licensed under the Apsi License 2.0. Apsi itself may not be sold; programs written in Apsi are yours.
+```
 
 **Phai Lang is based on Apsi, originally developed by ATEC** — https://github.com/ATECTechnologies/apsi ·
 Apsi License 2.0 (see [`LICENSE`](LICENSE)). Phai Lang is not the official Apsi and is not endorsed by ATEC.
@@ -10,16 +17,20 @@ Apsi License 2.0 (see [`LICENSE`](LICENSE)). Phai Lang is not the official Apsi 
 - a struct brought in with `import "file.apsi"` can be named in type annotations (`fn f(b: Box)`)
 - the `phai` command: `phai.bat` / `./phai.sh` (they use this folder's `.venv` when it exists), and `phai`
   after `pip install -e .`
+- `.phai` source files next to `.apsi`: `phai test`, `phai check`, `phai file.phai`, module loading, the security
+  scan, the REPL and new projects all see both (one list in `apsi/sources.py`)
+- the VS Code extension in `editors/vscode` is "Phai Lang (based on Apsi)": `.phai` and `.apsi` files, finds the
+  `phai` command, its own icon (`assets/brand/phai-lang-icon.svg`) instead of the Apsi logo
 - demos in [`construction/`](construction): room material calculator, room 3D viewer, colour-mixing balls in
   space, colliding galaxies (all with three.js)
 
 ```
-phai run examples/01_hello.apsi
+phai run hello.phai
 phai --version        # Phai Lang 2.6.0 (based on Apsi 2.6.0 by ATEC)
 ```
 
-`apsi` still works as before, programs keep the `.apsi` extension, and the Python package is still `apsi`, so
-updates from ATEC can be merged. The rest of this README is the original Apsi documentation: wherever it says
+`apsi` and `.apsi` still work as before, and the Python package is still `apsi`, so updates from ATEC can be
+merged. The rest of this README is the original Apsi documentation: wherever it says
 `apsi`, `phai` works too.
 
 ---

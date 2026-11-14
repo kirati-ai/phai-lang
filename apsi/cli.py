@@ -16,6 +16,7 @@ import time
 
 from . import __version__
 from .errors import ApsiError, CheckFailed
+from .sources import is_source
 
 PERMS = ("python", "ffi", "net", "fs", "env")
 
@@ -337,7 +338,7 @@ def cmd_check(args):
     status = 0
     files = _collect(args.files or ["."])
     if not files:
-        print("apsi check: no .apsi files found", file=sys.stderr)
+        print("apsi check: no .apsi or .phai files found", file=sys.stderr)
         return 2
     for f in files:
         src = _read(f)
@@ -365,7 +366,7 @@ def _collect(paths):
             for root, dirs, files in os.walk(p):
                 dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in
                                  ("node_modules", "__pycache__", "dist", "build", "venv"))
-                out += [os.path.join(root, f) for f in sorted(files) if f.endswith(".apsi")]
+                out += [os.path.join(root, f) for f in sorted(files) if is_source(f)]
         else:
             out.append(p)
     return out
@@ -380,7 +381,7 @@ def cmd_test(args):
             os.path.join(root, "tests")) else ["tests"]
     files = _collect(paths)
     if not files:
-        print(f"apsi test: no .apsi files in {', '.join(paths)}", file=sys.stderr)
+        print(f"apsi test: no .apsi or .phai files in {', '.join(paths)}", file=sys.stderr)
         return 2
     total_pass, total_fail, skipped = 0, 0, 0
     t0 = time.perf_counter()
@@ -689,7 +690,9 @@ def cmd_serve(args):
 
 
 def cmd_version(args):
-    print(f"Apsi {__version__}")
+    # editor extensions read "Apsi <version>" from this line, so the phai form keeps those words
+    print(f"Apsi {__version__}" if command_name() == "apsi"
+          else f"Phai Lang {__version__} (based on Apsi {__version__} by ATEC)")
     return 0
 
 
@@ -710,7 +713,7 @@ def _glue_flag_values(argv):
             if tok == "--allow-python":
                 is_value = nxt in ("all", "safe", "unsafe")
             else:
-                is_value = not nxt.startswith("-") and not nxt.lower().endswith(".apsi") and nxt not in ("-",)
+                is_value = not nxt.startswith("-") and not is_source(nxt) and nxt not in ("-",)
             if not is_value:
                 out.append(f"{tok}={_OPTIONAL_VALUE_FLAGS[tok]}")
                 i += 1
@@ -970,7 +973,7 @@ def main(argv=None):
     _utf8()
     _sigpipe()
     argv = _glue_flag_values(list(sys.argv[1:] if argv is None else argv))
-    light = bool(argv) and (argv[0] == "run" or (argv[0].endswith(".apsi") and os.path.isfile(argv[0]))) \
+    light = bool(argv) and (argv[0] == "run" or (is_source(argv[0]) and os.path.isfile(argv[0]))) \
         and not any(a in ("-h", "--help") for a in argv[1:2])
     ap, sub = _parser(light=light)
     if light and argv[0] != "run":
@@ -1020,11 +1023,11 @@ def _shortcut(argv, commands, ap):
             if flag in argv:
                 i = argv.index(flag)
                 return ["eval"] + argv[:i] + argv[i + 1:]
-        if any(t.lower().endswith(".apsi") for t in argv if not t.startswith("-")):
+        if any(is_source(t) for t in argv if not t.startswith("-")):
             return ["run"] + argv
     if first.startswith("-") or first in commands:
         return argv
-    if first.endswith(".apsi") or os.path.isfile(first):
+    if is_source(first) or os.path.isfile(first):
         return ["run"] + argv
     from .project import load_project, tasks_of
     try:

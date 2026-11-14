@@ -21,6 +21,7 @@ import time
 
 from . import __version__
 from .errors import ApsiError, CheckFailed
+from .sources import is_source, find_with_ext, default_ext
 
 _APSI_TAIL = re.compile(r"^(\(|\[|==|!=|\|>|=|[+\-*/%@]=|\.[A-Za-z_]|[+*%@<>^])")
 SHELL_WORDS = {"cd", "pwd", "ls", "dir", "clear", "cls", "run", "exit", "quit", "help"}
@@ -509,7 +510,7 @@ class Repl:
                 n_files += 1
                 size = st.st_size if st else 0
                 total += size
-                name = s.ok(e.name) if e.name.endswith(".apsi") else e.name
+                name = s.ok(e.name) if is_source(e.name) else e.name
                 rows.append((when, _size(size), name))
         self.print(s.dim(f"  Folder: {os.path.abspath(target)}"))
         if not rows:
@@ -532,9 +533,7 @@ class Repl:
         if not args:
             self.error("usage: run FILE.apsi")
             return
-        path = _shell_path(args[0])
-        if not os.path.exists(path) and os.path.exists(path + ".apsi"):
-            path += ".apsi"
+        path = find_with_ext(_shell_path(args[0]))
         try:
             with open(path, encoding="utf-8-sig") as fh:
                 src = fh.read()
@@ -560,9 +559,7 @@ class Repl:
         if not args:
             self.error("usage: :load FILE.apsi   (runs the file inside this session)")
             return
-        path = _shell_path(args[0])
-        if not os.path.exists(path) and os.path.exists(path + ".apsi"):
-            path += ".apsi"
+        path = find_with_ext(_shell_path(args[0]))
         try:
             with open(path, encoding="utf-8-sig") as fh:
                 src = fh.read()
@@ -710,9 +707,9 @@ class Repl:
         cmd_fmt(_NS(files=files, check=False))
 
     def c_save(self, rest):
-        path = _shell_path(rest) if rest else "session.apsi"
-        if not path.endswith(".apsi"):
-            path += ".apsi"
+        path = _shell_path(rest) if rest else "session" + default_ext()
+        if not is_source(path):
+            path += default_ext()
         try:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write("\n\n".join(self.source_log) + "\n")

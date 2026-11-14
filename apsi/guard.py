@@ -366,7 +366,8 @@ def scan_file(path, blocklist=None, rules=None):
     if EICAR in data:
         out.append(Finding("critical", "eicar", 0, "EICAR antivirus test signature", path))
     low = path.lower()
-    if low.endswith(".apsi"):
+    from .sources import is_source, SOURCE_EXTS
+    if is_source(low):
         from .parser import parse
         src = data.decode("utf-8", "replace")
         try:
@@ -384,7 +385,7 @@ def scan_file(path, blocklist=None, rules=None):
     elif data[:2] == b"MZ" or data[:4] == b"\x7fELF" or data[:4] in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf"):
         kind = "Windows executable/DLL" if data[:2] == b"MZ" else "native binary"
         out.append(Finding("info", "native-binary", 0, f"{kind}, sha256 {digest}", path))
-        if low.endswith((".apsi", ".txt", ".json", ".csv", ".md", ".png", ".jpg", ".pdf")):
+        if low.endswith(SOURCE_EXTS + (".txt", ".json", ".csv", ".md", ".png", ".jpg", ".pdf")):
             out.append(Finding("critical", "disguised-binary", 0, "executable disguised with a document extension", path))
         if re.search(rb"(VirtualAllocEx|WriteProcessMemory|CreateRemoteThread)", data) and \
                 re.search(rb"(OpenProcess)", data):

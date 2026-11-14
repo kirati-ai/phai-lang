@@ -1,0 +1,4 @@
+images/icon.png
+images/file-icon.png
+*.vsix
+.vscode-test/**

@@ -164,6 +164,33 @@ class CommandLine(TempDir):
         self.assertEqual(rc, 1)
         self.assertIn("circular import", err)
 
+    def test_phai_extension(self):
+        d = os.path.join(self.dir, "phai_ext")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "lib.phai"), "w", encoding="utf-8") as fh:
+            fh.write("struct Box:\n    w: Float\nfn make(w: Float) -> Box = Box(w)\n")
+        with open(os.path.join(d, "main.phai"), "w", encoding="utf-8") as fh:
+            fh.write('import "lib.phai"\nfn area(b: Box) -> Float = b.w * b.w\nprint(area(make(3.0)))\n'
+                     'test "area":\n    assert area(make(2.0)) == 4.0\n')
+        with open(os.path.join(d, "old.apsi"), "w", encoding="utf-8") as fh:
+            fh.write('test "old":\n    assert 1 + 1 == 2\n')
+        main = os.path.join(d, "main.phai")
+        rc, out, err = apsi(main)                                   # shortcut: `phai main.phai`
+        self.assertEqual(rc, 0, err[-500:])
+        self.assertIn("9.0", out)
+        rc, out, err = apsi("test", d)                              # finds .phai and .apsi together
+        self.assertEqual(rc, 0, err[-500:])
+        self.assertIn("2 passed", out + err)
+        from apsi.sources import is_source, module_candidates
+        self.assertTrue(is_source("x.phai") and is_source("X.APSI") and not is_source("x.py"))
+        self.assertEqual([os.path.basename(c) for c in module_candidates(os.path.join(d, "m"))],
+                         ["m.apsi", "m.phai", "__init__.apsi", "__init__.phai"])
+        from apsi.guard import scan_file
+        bad = os.path.join(d, "evil.phai")
+        with open(bad, "w", encoding="utf-8") as fh:
+            fh.write('let p = pyimport("os")\np.system("rm -rf /")\n')
+        self.assertTrue(scan_file(bad), "the security scan reads .phai programs like .apsi")
+
     def test_phai_command_name(self):
         env = dict(ENV, APSI_PROG="phai")
         out = subprocess.run([sys.executable, "-m", "apsi", "--version"], env=env, capture_output=True, text=True).stdout

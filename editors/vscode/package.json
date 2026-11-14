@@ -1,9 +1,9 @@
 {
-  "name": "apsi-language",
-  "displayName": "Apsi Language",
-  "description": "Apsi for VS Code, Cursor, Windsurf and VSCodium: syntax colours, live unit/shape diagnostics, hover, go to definition, completion, formatting, run/test/REPL commands, apsi.toml tasks and snippets",
+  "name": "phai-lang",
+  "displayName": "Phai Lang (based on Apsi)",
+  "description": "Phai Lang for VS Code (.phai and .apsi files) — based on Apsi, originally developed by ATEC (https://github.com/ATECTechnologies/apsi), Apsi License 2.0. Not the official Apsi extension. Syntax colours, live unit/shape diagnostics, hover, go to definition, completion, formatting, run/test/REPL commands and snippets",
   "version": "2.6.0",
-  "publisher": "apsi",
+  "publisher": "phai",
   "license": "MIT",
   "engines": {
     "vscode": "^1.82.0"
@@ -28,6 +28,7 @@
   "activationEvents": [
     "onLanguage:apsi",
     "workspaceContains:**/*.apsi",
+    "workspaceContains:**/*.phai",
     "workspaceContains:apsi.toml",
     "onCommand:apsi.convertPython",
     "onDebugResolve:apsi",
@@ -38,17 +39,15 @@
       {
         "id": "apsi",
         "aliases": [
-          "Apsi",
+          "Phai Lang",
+          "phai",
           "apsi"
         ],
         "extensions": [
+          ".phai",
           ".apsi"
         ],
-        "configuration": "./language-configuration.json",
-        "icon": {
-          "light": "./images/file-icon.png",
-          "dark": "./images/file-icon.png"
-        }
+        "configuration": "./language-configuration.json"
       },
       {
         "id": "toml",
@@ -494,9 +493,9 @@
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
   },
-  "icon": "images/icon.png",
+  "icon": "images/phai-icon.png",
   "galleryBanner": {
-    "color": "#0B1220",
+    "color": "#0e5c41",
     "theme": "dark"
   },
   "extensionKind": [

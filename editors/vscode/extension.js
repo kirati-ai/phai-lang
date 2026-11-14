@@ -91,10 +91,10 @@ function findApsi(force) {
   if (IS_WIN) {
     const local = process.env.LOCALAPPDATA;
     if (local) candidates.push({ command: path.join(local, "Apsi", "venv", "Scripts", "python.exe"), args: ["-m", "apsi"] });
-    candidates.push({ command: "apsi.cmd", args: [] }, { command: "py", args: ["-3", "-m", "apsi"] }, { command: "python", args: ["-m", "apsi"] });
+    candidates.push({ command: "phai.cmd", args: [] }, { command: "apsi.cmd", args: [] }, { command: "py", args: ["-3", "-m", "apsi"] }, { command: "python", args: ["-m", "apsi"] });
   } else {
     candidates.push({ command: path.join(process.env.HOME || "", ".apsi", "venv", "bin", "python"), args: ["-m", "apsi"] });
-    candidates.push({ command: "apsi", args: [] }, { command: "python3", args: ["-m", "apsi"] });
+    candidates.push({ command: "phai", args: [] }, { command: "apsi", args: [] }, { command: "python3", args: ["-m", "apsi"] });
   }
   for (const c of candidates) {
     if (path.isAbsolute(c.command) && !fs.existsSync(c.command)) continue;
@@ -149,7 +149,7 @@ async function runInTerminal(parts, opts = {}) {
 async function activeFile(uri) {
   if (uri && uri.fsPath) return uri.fsPath;
   const ed = vscode.window.activeTextEditor;
-  if (!ed) { vscode.window.showWarningMessage("Open an .apsi file first."); return null; }
+  if (!ed) { vscode.window.showWarningMessage("Open a .phai or .apsi file first."); return null; }
   if (ed.document.isUntitled) {
     const ok = await ed.document.save();
     if (!ok) return null;
@@ -519,7 +519,7 @@ function activate(context) {
         }
       }
       if (!config.program) {
-        return vscode.window.showInformationMessage("Open an .apsi file to debug it.").then(() => undefined);
+        return vscode.window.showInformationMessage("Open a .phai or .apsi file to debug it.").then(() => undefined);
       }
       return config;
     },

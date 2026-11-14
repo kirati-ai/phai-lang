@@ -290,7 +290,8 @@ def pack(root=".", out_dir=None, check=True, quiet=False):
     if entry not in files:
         files.append(entry)
     if check:
-        _check_sources(root, [f for f in files if f.endswith(".apsi")])
+        from .sources import is_source
+        _check_sources(root, [f for f in files if is_source(f)])
     manifest = {
         "format": "apsil", "format_version": FORMAT_VERSION, "name": name, "version": version,
         "summary": str(pkg.get("summary") or ""), "description_file": next((f for f in files

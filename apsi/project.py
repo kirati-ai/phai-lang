@@ -152,7 +152,7 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.apsi]
+[*.{apsi,phai}]
 indent_style = space
 indent_size = 4
 """
@@ -303,7 +303,7 @@ def _vscode_files(main):
              "isBackground": True, "problemMatcher": []},
         ],
     }
-    settings = {"files.associations": {"*.apsi": "apsi"}, "[apsi]": {"editor.tabSize": 4,
+    settings = {"files.associations": {"*.apsi": "apsi", "*.phai": "apsi"}, "[apsi]": {"editor.tabSize": 4,
                 "editor.insertSpaces": True, "editor.formatOnSave": True}}
     ext = {"recommendations": ["apsi.apsi-language"]}
     import json
