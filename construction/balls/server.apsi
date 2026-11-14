@@ -1,0 +1,113 @@
+# balls/server.apsi — ลูกบอลลอยในอวกาศ ชนแล้วผสมสี: apsi จำลองฟิสิกส์ · three.js วาด
+# รันจากโฟลเดอร์หลักของ repo:
+#   apsi.bat run construction\balls\server.apsi --allow-net --allow-read=public
+# แล้วเปิด http://127.0.0.1:8091/
+use web
+import "sim.apsi"
+
+let SIZES = [500, 2000, 5000]
+let HALF_HEIGHT = 0.9m           # อวกาศสูง 1.8 ม. · กว้างตามสัดส่วนจอ
+let HALF_DEPTH  = 1.0m           # ลึก 2 ม. (ลูกใกล้-ไกลขนาดบนจอต่างกันเกือบเท่าตัว)
+let FRAME = 1[s] / 60
+let SUBSTEPS = 2
+
+# เฟรมที่ส่งให้หน้าเว็บ (ไบนารี ไม่ใช่ JSON — 5,000 ลูก = ~75 KB ต่อเฟรม):
+#   หัว float32 × 4 = [จำนวนลูก, ชนในเฟรมนี้, เวลาคำนวณ ms, โหมด native 1/0]
+#   ตำแหน่ง float32 × 3 ต่อลูก · สี uint8 × 3 ต่อลูก (น้ำหนักแดง เหลือง น้ำเงิน × 255)
+fn frame_bytes(w, hits: Int, ms: Float):        # w = World จาก sim.apsi (ชนิดที่ import มาใช้เป็นป้ายชนิดตรงนี้ไม่ได้)
+    let head = tensor([float(w.n), float(hits), ms, 1.0 if w.native else 0.0], dtype="float32")
+    let p = tensor(w.pos, dtype="float32")
+    let c = tensor(w.col * 255, dtype="uint8")
+    return head.tobytes() + p.tobytes() + c.tobytes()
+
+fn space(total: Int, native: Bool, aspect: Float, seed: Int):
+    let a = min(max(aspect, 0.5), 2.5)              # จอแนวตั้งถึงจอกว้างพิเศษ
+    return new_world(total, native, HALF_HEIGHT * a, HALF_HEIGHT, HALF_DEPTH, seed)
+
+let app = server(name="balls", max_body=4096)
+
+# 1 การเชื่อมต่อ = 1 อวกาศ · หน้าเว็บขอเฟรมถัดไปเมื่อวาดเฟรมก่อนเสร็จ → ยิ่งคำนวณเร็ว ยิ่งได้เฟรม/วินาทีสูง
+@app.websocket("/ws", max_message=4096)
+fn play(ws):
+    var w = space(2000, true, 1.6, 0)
+    var seed = 0
+    for msg in ws:
+        let m = json_parse(msg)
+        let cmd = m["cmd"]
+        if cmd == "reset":
+            let total = int(m["total"])
+            if total not in SIZES:
+                ws.close(1008, "จำนวนลูกไม่ถูกต้อง")
+                return
+            seed += 1
+            w = space(total, bool(m["native"]), float(m["aspect"]), seed)
+            ws.send(frame_bytes(w, 0, 0.0))
+        elif cmd == "mode":
+            w.native = bool(m["native"])        # สลับโหมดกลางทาง ลูกเดิมอยู่ครบ
+        elif cmd == "frame":
+            let t0 = clock()
+            let hits = step(w, FRAME, SUBSTEPS)
+            let ms = (clock() - t0).value * 1000
+            ws.send(frame_bytes(w, hits, ms))
+
+app.static("/app", "public")             # app.static("/") ใช้ไม่ได้ใน apsi 2.6.0 → วางที่ /app
+
+@app.get("/")
+fn home(req) = redirect("/app/")
+
+# หน้าเว็บโหลด three.js จาก jsdelivr และคุยผ่าน WebSocket ของเครื่องตัวเอง
+fn allow_page(req, resp):
+    if req.path.startswith("/app"):
+        resp.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' ws://127.0.0.1:8091 ws://localhost:8091; frame-ancestors 'none'"
+        resp.headers["Cache-Control"] = "no-cache"      # แก้ไฟล์แล้วโหลดใหม่เห็นทันที
+app.after(allow_page)
+
+test "native กับโหมดธรรมดาได้ผลเท่ากันเป๊ะ":
+    let a = space(500, true, 1.6, 1)
+    let b = space(500, false, 1.6, 1)
+    var ha = 0
+    var hb = 0
+    for i in 0..5:
+        ha += step(a, FRAME, SUBSTEPS)
+        hb += step(b, FRAME, SUBSTEPS)
+    assert ha == hb
+    assert max(abs(a.pos - b.pos)) == 0.0
+    assert max(abs(a.col - b.col)) == 0.0
+
+test "สีรวมกันได้ 1 เสมอ และไม่มีลูกหลุดนอกอวกาศ":
+    let w = space(2000, true, 1.6, 2)
+    for i in 0..300:
+        step(w, FRAME, SUBSTEPS)
+    assert max(abs(sum(w.col, axis=1) - 1.0)) < 1e-9
+    assert max(abs(w.pos[:, 1])) <= w.hy
+    assert max(abs(w.pos[:, 2])) <= w.hz
+
+test "ชนแล้วสีผสมจริง":
+    let w = space(2000, true, 1.6, 3)
+    for i in 0..300:
+        step(w, FRAME, SUBSTEPS)
+    # เริ่มจากแม่สีล้วน (น้ำหนักสูงสุด = 1) → หลังชนต้องมีลูกที่ไม่ใช่แม่สีล้วนแล้ว
+    var mixed = 0
+    for i in 0..w.n:
+        if max(w.col[i, 0], w.col[i, 1], w.col[i, 2]) < 0.99:
+            mixed += 1
+    assert mixed > 100
+
+test "ผ่านไป 20 วินาที สียังไม่กลืนเป็นสีเดียว":
+    let w = space(2000, true, 1.6, 4)
+    for i in 0..1200:
+        step(w, FRAME, SUBSTEPS)
+    # ลูกส่วนใหญ่ยังเด่นด้วยแม่สีเดิม (น้ำหนักสูงสุด > 0.6) · ไม่มีกฎสีกลับ = ทุกลูกเหลือ ~0.33 เท่ากันหมด
+    var vivid = 0
+    for i in 0..w.n:
+        if max(w.col[i, 0], w.col[i, 1], w.col[i, 2]) > 0.6:
+            vivid += 1
+    assert vivid > w.n // 2
+
+if testing():
+    pass
+elif "net" not in permissions():
+    print("รันด้วย --allow-net --allow-read=public เพื่อเปิดเซิร์ฟเวอร์")
+else:
+    print(f"เปิด http://127.0.0.1:8091/  ({native_threads()} คอร์)")
+    app.run(host="127.0.0.1", port=8091, workers=4)

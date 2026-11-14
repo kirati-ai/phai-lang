@@ -1,0 +1,103 @@
+# room3d/server.apsi — คำนวณวัสดุห้องด้วย apsi แล้วให้หน้าเว็บ three.js วาดห้องเป็น 3D
+# รันจากโฟลเดอร์หลักของ repo:
+#   apsi.bat run construction\room3d\server.apsi --allow-net --allow-read=public
+# แล้วเปิด http://127.0.0.1:8090/
+use web
+
+# ---------- สเปกวัสดุ (ราคาเป็นบาท = ตัวเลขเปล่า · เลขสมมติ) ----------
+let tile_per_box   = 0.6m * 0.6m * 4      # กระเบื้อง 60×60 ซม. กล่องละ 4 แผ่น
+let tile_waste     = 0.05
+let tile_price     = 450                  # บาท/กล่อง
+let paint_cover    = 10[m^2/L]            # 1 ลิตร ทาได้ 10 ตร.ม. ต่อรอบ
+let paint_coats    = 2
+let paint_bucket   = 9L
+let paint_price    = 1650                 # บาท/ถัง
+let board_area     = 1.2m * 2.4m          # แผ่นยิปซัม 1.20×2.40 ม.
+let board_waste    = 0.10
+let board_price    = 210                  # บาท/แผ่น
+let slab_thick     = 10[cm]
+let concrete_step  = 0.5[m^3]
+let concrete_price = 2400                 # บาท/คิว
+
+fn pieces(need: Area, per_piece: Area, waste: Float) -> Int =
+    ceil(need * (1 + waste) / per_piece)
+
+# ขนาดทั้งหมดเป็นหน่วยจริง — ถ้าสูตรไหนผิดหน่วย ตัวตรวจไม่ยอมรันตั้งแต่ต้น
+fn room(width: Length, length: Length, height: Length,
+        door_w: Length, door_h: Length, win_w: Length, win_h: Length):
+    let floor_area = width * length
+    let wall_area  = 2 * (width + length) * height - door_w * door_h - win_w * win_h
+    let tile_boxes = pieces(floor_area, tile_per_box, tile_waste)
+    let liters     = wall_area * paint_coats / paint_cover
+    let cans       = ceil(liters / paint_bucket)
+    let boards     = pieces(floor_area, board_area, board_waste)
+    let slab       = floor_area * slab_thick
+    let cue        = ceil(slab / concrete_step) * 0.5
+    let items = [
+        {"name": "กระเบื้อง 60×60", "qty": tile_boxes, "unit": "กล่อง", "baht": tile_boxes * tile_price},
+        {"name": f"สีทาผนัง {paint_coats} รอบ ({(liters as [L]).magnitude:.1f} ลิตร)", "qty": cans, "unit": "ถัง", "baht": cans * paint_price},
+        {"name": "ยิปซัมฝ้า 1.20×2.40", "qty": boards, "unit": "แผ่น", "baht": boards * board_price},
+        {"name": "คอนกรีตพื้นหนา 10 ซม.", "qty": cue, "unit": "คิว", "baht": cue * concrete_price},
+    ]
+    var total = 0
+    for it in items:
+        total += it["baht"]
+    return {
+        "floor_m2": (floor_area as [m^2]).magnitude,
+        "wall_m2":  (wall_area as [m^2]).magnitude,
+        "slab_m3":  (slab as [m^3]).magnitude,
+        "items": items,
+        "total_baht": total,
+    }
+
+# ตัวเลขจากหน้าเว็บเป็นเมตรล้วน → ติดหน่วยตรงนี้ที่เดียว
+fn metres(body, key: Str, lo: Float, hi: Float):
+    let v = body[key]
+    if v < lo or v > hi:
+        abort(422, f"{key} ต้องอยู่ระหว่าง {lo} ถึง {hi} เมตร")
+    return v * u.m
+
+let app = server(name="room3d", max_body=4096)
+app.rate_limit(50, per=1[s], burst=100)
+
+@app.post("/api/room")
+fn calc(req):
+    let b = req.json()
+    let w  = metres(b, "width", 1.5, 20.0)
+    let l  = metres(b, "length", 1.5, 20.0)
+    let h  = metres(b, "height", 2.0, 6.0)
+    let dw = metres(b, "door_w", 0.6, 2.0)
+    let dh = metres(b, "door_h", 1.8, 3.0)
+    let ww = metres(b, "win_w", 0.0, 4.0)
+    let wh = metres(b, "win_h", 0.0, 2.5)
+    if dw >= w or dh >= h or ww >= l or wh + 0.9m >= h:
+        abort(422, "ประตูหรือหน้าต่างใหญ่เกินผนัง")
+    return room(w, l, h, dw, dh, ww, wh)
+
+# app.static("/") ใช้ไม่ได้ (web.py เทียบ prefix เป็น "//") → วางหน้าที่ /app แล้วพา / ไปที่นั่น
+app.static("/app", "public")                  # path นับจากโฟลเดอร์ของไฟล์นี้
+
+@app.get("/")
+fn home(req) = redirect("/app/")
+
+# หน้าเว็บโหลด three.js จาก jsdelivr → เปิด CSP ให้ CDN นั้นตัวเดียว (ที่เหลือคงตามค่าเริ่มของ apsi)
+fn allow_three(req, resp):
+    if req.path.startswith("/app"):
+        resp.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'none'"
+app.after(allow_three)
+
+test "ห้อง 4×3.5 ม. ได้ตัวเลขเดียวกับ room_materials.apsi":
+    let r = room(4m, 3.5m, 2.6m, 0.9m, 2.0m, 1.2m, 1.2m)
+    assert r["floor_m2"] ~= 14.0
+    assert r["wall_m2"] ~= 35.76
+    assert r["total_baht"] == 11460
+    assert app.handle("POST", "/api/room", {"width": 50, "length": 3, "height": 2.6,
+        "door_w": 0.9, "door_h": 2, "win_w": 1, "win_h": 1}).status == 422
+
+if testing():
+    pass
+elif "net" not in permissions():
+    print("รันด้วย --allow-net --allow-read=public เพื่อเปิดเซิร์ฟเวอร์")
+else:
+    print("เปิด http://127.0.0.1:8090/")
+    app.run(host="127.0.0.1", port=8090, workers=4)

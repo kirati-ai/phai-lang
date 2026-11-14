@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ห้อง 3D · คำนวณวัสดุ</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <aside>
+    <h1>ห้อง 3D · คำนวณวัสดุ</h1>
+    <h2>ขนาดห้อง (เมตร)</h2>
+    <div class="grid">
+      <label>กว้าง<input id="width" type="number" step="0.1" value="4"></label>
+      <label>ยาว<input id="length" type="number" step="0.1" value="3.5"></label>
+      <label>สูง<input id="height" type="number" step="0.1" value="2.6"></label>
+    </div>
+    <h2>ประตู · หน้าต่าง (เมตร)</h2>
+    <div class="grid">
+      <label>ประตูกว้าง<input id="door_w" type="number" step="0.1" value="0.9"></label>
+      <label>ประตูสูง<input id="door_h" type="number" step="0.1" value="2.0"></label>
+      <label>หน้าต่างกว้าง<input id="win_w" type="number" step="0.1" value="1.2"></label>
+      <label>หน้าต่างสูง<input id="win_h" type="number" step="0.1" value="1.2"></label>
+    </div>
+    <div class="err" id="err"></div>
+    <h2>วัสดุ (คำนวณโดย apsi)</h2>
+    <table>
+      <thead><tr><th>รายการ</th><th class="n">จำนวน</th><th class="n">บาท</th></tr></thead>
+      <tbody id="items"></tbody>
+      <tfoot><tr><td>รวม</td><td></td><td class="n" id="total"></td></tr></tfoot>
+    </table>
+    <div class="area" id="area"></div>
+  </aside>
+  <div id="view"></div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

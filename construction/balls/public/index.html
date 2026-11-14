@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ลูกบอลอวกาศผสมสี</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="view"></div>
+<div class="panel">
+  <h1>ลูกบอลอวกาศผสมสี</h1>
+  <div class="row" id="sizes">
+    <button data-total="500">500 ลูก</button>
+    <button data-total="2000" class="on">2,000 ลูก</button>
+    <button data-total="5000">5,000 ลูก</button>
+  </div>
+  <div class="row">
+    <button id="mode" class="on">⚡ native ทุกคอร์</button>
+    <button id="reset">เริ่มใหม่</button>
+    <button id="full" class="icon" title="เต็มจอ">⛶</button>
+  </div>
+  <table>
+    <tr><td>จำนวนลูก</td><td id="s-n">–</td></tr>
+    <tr><td>ชนกันต่อเฟรม</td><td id="s-hits">–</td></tr>
+    <tr><td>apsi คำนวณต่อเฟรม</td><td id="s-ms">–</td></tr>
+    <tr><td>เฟรมต่อวินาที</td><td id="s-fps">–</td></tr>
+  </table>
+  <div class="legend"><span class="r"></span>แดง <span class="y"></span>เหลือง <span class="b"></span>น้ำเงิน · ชนกันแล้วผสมสีตามแรงชน</div>
+  <div class="err" id="err"></div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

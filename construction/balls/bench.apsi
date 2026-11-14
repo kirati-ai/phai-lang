@@ -1,0 +1,28 @@
+# bench.apsi — วัดเวลาต่อเฟรม: โหมดธรรมดา vs native ทุกคอร์
+# รัน: apsi.bat run construction\balls\bench.apsi [จำนวนลูก] [จำนวนเฟรม]
+import "sim.apsi"
+
+let a = args()
+let total = int(a[0]) if len(a) > 0 else 2000
+let frames = int(a[1]) if len(a) > 1 else 120
+print(f"ลูกบอล {total} ลูก · {native_threads()} คอร์")
+
+fn run(native: Bool, frames: Int):
+    let w = new_world(total, native, 0.5m, 0.75m)
+    # เทให้ครบก่อน แล้ววัดตอนกองเต็ม
+    var f = 0
+    while w.n < total:
+        step(w, 1[s] / 60, 4, 40)
+        f += 1
+    let t0 = clock()
+    var hits = 0
+    for i in 0..frames:
+        hits += step(w, 1[s] / 60, 4, 40)
+    let ms = (clock() - t0).value * 1000 / frames
+    let label = "native" if native else "ธรรมดา"
+    print(f"  {label}: {ms:.2f} ms/เฟรม · ชน {hits // frames} ครั้ง/เฟรม · เทครบใน {f} เฟรม")
+    return ms
+
+let fast = run(true, frames)
+let slow = run(false, max(2, frames // 40))
+print(f"  เร็วขึ้น {slow / fast:.0f} เท่า")

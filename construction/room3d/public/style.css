@@ -1,0 +1,19 @@
+  :root { --bg:#f4f5f7; --panel:#fff; --text:#1d2330; --muted:#6b7280; --line:#e3e6eb; --accent:#2f6fde; --bad:#c0392b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Sarabun","Leelawadee UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); font-size:13px; }
+  .wrap { display:grid; grid-template-columns:320px 1fr; height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); padding:14px; overflow:auto; }
+  h1 { font-size:15px; margin:0 0 10px; }
+  h2 { font-size:12px; margin:14px 0 6px; color:var(--muted); font-weight:600; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 8px; }
+  label { display:flex; flex-direction:column; gap:2px; font-size:11px; color:var(--muted); }
+  input { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px; color:var(--text); }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  td, th { padding:4px 2px; border-bottom:1px solid var(--line); text-align:left; }
+  td.n, th.n { text-align:right; white-space:nowrap; }
+  tfoot td { font-weight:600; border-bottom:none; }
+  .area { color:var(--muted); font-size:11px; margin-top:6px; line-height:1.6; }
+  .err { color:var(--bad); font-size:12px; min-height:16px; margin-top:6px; }
+  #view { position:relative; }
+  canvas { display:block; }
+  @media (max-width: 760px) { .wrap { grid-template-columns:1fr; grid-template-rows:auto 60vh; height:auto; } }

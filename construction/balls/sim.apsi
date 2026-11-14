@@ -1,0 +1,250 @@
+# sim.apsi — ลูกบอลลอยในอวกาศ ชนกันแล้วผสมสีแบบแม่สีระบาย (แดง เหลือง น้ำเงิน)
+#
+# ไม่มีแรงโน้มถ่วง · ผนังล่องหน 6 ด้าน (ขอบจอ) · ชนแล้วเด้งเต็มแรง ลูกจึงลอยไปมาไม่หยุด
+# ตัวเลขในฟังก์ชันจำลองเป็นหน่วย SI ล้วน (เมตร · วินาที) — หน่วยถูกตรวจที่ทางเข้า (new_world/step)
+# แล้วส่งเข้าฟังก์ชันเป็นตัวเลขเปล่า เพราะ native ต้องการ tensor ตัวเลข
+#
+# สี = น้ำหนักแม่สี 3 ช่อง (แดง, เหลือง, น้ำเงิน) รวมกัน = 1 · ชนกัน = น้ำหนักขยับเข้าหากันตามแรงชน
+# หน้าเว็บแปลงเป็นสีจอแบบผสมสีระบาย (เหลือง + น้ำเงิน = เขียว ไม่ใช่เทา)
+#
+# ทุกฟังก์ชันเขียนครั้งเดียว: โหมดธรรมดาเรียกตรง ๆ · โหมด native เรียกผ่านตัวห่อ @native (คอมไพล์ฟังก์ชันข้างในไปด้วย)
+
+let RESTITUTION = 1.0           # อวกาศ: ชนแล้วเด้งเต็มแรง ไม่เสียพลังงาน
+let MIX_RATE    = 0.5           # ชนแรงสุด = ขยับสีเข้าหากัน 50% (เห็นชัดทันทีที่ชน)
+let MIX_SPEED   = 0.6[m/s]      # ชนแรงเท่านี้ขึ้นไป = ผสมเต็มอัตรา · เฉี่ยวกันเบา ๆ ผสมน้อย
+let RECOVER     = 1.2[1/s]      # หลังชน สีค่อย ๆ กลับเป็นแม่สีเดิมของลูก (ครึ่งทางใน ~0.6 วินาที)
+                                # ไม่มีข้อนี้ ชนกันไม่หยุด → ทุกลูกกลืนเป็นน้ำตาลเดียวกันใน ~30 วินาที
+let DRIFT_SPEED = 0.5[m/s]      # ความเร็วลอยเริ่มต้นสูงสุดแต่ละแกน
+
+# ---------- โปรยลูกทั่วอวกาศ: ตำแหน่ง/ทิศสุ่ม · สีแม่สีทีละ 1 ใน 3 ----------
+fn next_rand(x: Int) -> Int = (x * 1103515245 + 12345) % 2147483648
+fn unit(x: Int) -> Float = x / 2147483648.0 * 2.0 - 1.0       # -1 .. 1
+
+fn scatter(pos, vel, col, total: Int, hx: Float, hy: Float, hz: Float, r: Float, speed: Float, seed: Int):
+    var s = seed * 7919 + 17
+    for i in 0..total:
+        s = next_rand(s)
+        pos[i, 0] = unit(s) * (hx - r)
+        s = next_rand(s)
+        pos[i, 1] = unit(s) * (hy - r)
+        s = next_rand(s)
+        pos[i, 2] = unit(s) * (hz - r)
+        for a in 0..3:
+            s = next_rand(s)
+            vel[i, a] = unit(s) * speed
+        let k = i % 3
+        col[i, 0] = 1.0 if k == 0 else 0.0
+        col[i, 1] = 1.0 if k == 1 else 0.0
+        col[i, 2] = 1.0 if k == 2 else 0.0
+
+# ---------- เคลื่อนที่ + ผนังล่องหน 6 ด้าน ----------
+fn integrate(pos, vel, n: Int, dt: Float, hx: Float, hy: Float, hz: Float, r: Float):
+    parallel for i in 0..n:
+        for a in 0..3:
+            pos[i, a] += vel[i, a] * dt
+            let h = hx if a == 0 else (hy if a == 1 else hz)
+            if pos[i, a] < -h + r:
+                pos[i, a] = -h + r
+                vel[i, a] = abs(vel[i, a])
+            if pos[i, a] > h - r:
+                pos[i, a] = h - r
+                vel[i, a] = -abs(vel[i, a])
+
+# ---------- สีค่อย ๆ กลับเป็นแม่สีเดิม (home) ----------
+fn recover(col, home, n: Int, k: Float):
+    parallel for i in 0..n:
+        for a in 0..3:
+            col[i, a] += (home[i, a] - col[i, a]) * k
+
+# ---------- จัดลูกลงช่องตาราง (ช่องละ 2r) ให้หาเพื่อนบ้านได้โดยไม่ต้องเทียบทุกคู่ ----------
+fn cell_index(x: Float, y: Float, z: Float, hx: Float, hy: Float, hz: Float, cell: Float, gx: Int, gy: Int, gz: Int) -> Int:
+    let cx = min(max(int(floor((x + hx) / cell)), 0), gx - 1)
+    let cy = min(max(int(floor((y + hy) / cell)), 0), gy - 1)
+    let cz = min(max(int(floor((z + hz) / cell)), 0), gz - 1)
+    return cx + gx * (cy + gy * cz)
+
+fn build_grid(pos, n: Int, cell_of, counts, starts, cursor, sorted,
+              hx: Float, hy: Float, hz: Float, cell: Float, gx: Int, gy: Int, gz: Int):
+    for c in 0..len(counts):
+        counts[c] = 0
+    for i in 0..n:
+        let c = cell_index(pos[i, 0], pos[i, 1], pos[i, 2], hx, hy, hz, cell, gx, gy, gz)
+        cell_of[i] = c
+        counts[c] += 1
+    var run = 0
+    for c in 0..len(counts):
+        starts[c] = run
+        cursor[c] = run
+        run += counts[c]
+    for i in 0..n:
+        let c = cell_of[i]
+        sorted[cursor[c]] = i
+        cursor[c] += 1
+
+# ---------- ชน: แต่ละลูกดูเพื่อนบ้าน 27 ช่อง แล้วเขียนผลของตัวเองลงชุดใหม่ (ไม่แย่งกันเขียน → ขนานได้) ----------
+fn collide(pos, vel, col, npos, nvel, ncol, n: Int, cell_of, counts, starts, sorted,
+           gx: Int, gy: Int, gz: Int, r: Float, e: Float, mix: Float, mix_speed: Float) -> Int:
+    var hits = 0
+    parallel for i in 0..n:
+        var px = pos[i, 0]
+        var py = pos[i, 1]
+        var pz = pos[i, 2]
+        var vx = vel[i, 0]
+        var vy = vel[i, 1]
+        var vz = vel[i, 2]
+        var cr = col[i, 0]
+        var cyl = col[i, 1]
+        var cb = col[i, 2]
+        let c = cell_of[i]
+        let ix = c % gx
+        let iy = (c // gx) % gy
+        let iz = c // (gx * gy)
+        for dz in -1..2:
+            for dy in -1..2:
+                for dx in -1..2:
+                    let ax = ix + dx
+                    let ay = iy + dy
+                    let az = iz + dz
+                    if ax >= 0 and ax < gx and ay >= 0 and ay < gy and az >= 0 and az < gz:
+                        let nc = ax + gx * (ay + gy * az)
+                        for k in starts[nc]..(starts[nc] + counts[nc]):
+                            let j = sorted[k]
+                            if j != i:
+                                let ddx = pos[i, 0] - pos[j, 0]
+                                let ddy = pos[i, 1] - pos[j, 1]
+                                let ddz = pos[i, 2] - pos[j, 2]
+                                let d2 = ddx * ddx + ddy * ddy + ddz * ddz
+                                if d2 < 4 * r * r and d2 > 1e-12:
+                                    let d = sqrt(d2)
+                                    let nx = ddx / d
+                                    let ny = ddy / d
+                                    let nz = ddz / d
+                                    let push = (2 * r - d) * 0.5      # ดันออกคนละครึ่งของส่วนที่ทับกัน
+                                    px += nx * push
+                                    py += ny * push
+                                    pz += nz * push
+                                    let vn = (vel[i, 0] - vel[j, 0]) * nx + (vel[i, 1] - vel[j, 1]) * ny + (vel[i, 2] - vel[j, 2]) * nz
+                                    if vn < 0:
+                                        let imp = (1 + e) * 0.5 * vn
+                                        vx -= imp * nx
+                                        vy -= imp * ny
+                                        vz -= imp * nz
+                                        # ผสมสีตามแรงชน: เฉี่ยวเบา ≈ 0 · ชนแรง = mix
+                                        let w = mix * min(-vn / mix_speed, 1.0)
+                                        cr += (col[j, 0] - col[i, 0]) * w
+                                        cyl += (col[j, 1] - col[i, 1]) * w
+                                        cb += (col[j, 2] - col[i, 2]) * w
+                                        hits += 1
+        npos[i, 0] = px
+        npos[i, 1] = py
+        npos[i, 2] = pz
+        nvel[i, 0] = vx
+        nvel[i, 1] = vy
+        nvel[i, 2] = vz
+        let total = cr + cyl + cb
+        ncol[i, 0] = cr / total
+        ncol[i, 1] = cyl / total
+        ncol[i, 2] = cb / total
+    return hits // 2                                  # คู่หนึ่งนับจากทั้งสองฝั่ง
+
+# ---------- ตัวห่อ native: ฟังก์ชันเดียวกันทุกบรรทัด แค่คอมไพล์เป็นโค้ดเครื่อง + ใช้ทุกคอร์ ----------
+@native
+fn scatter_native(pos, vel, col, total: Int, hx: Float, hy: Float, hz: Float, r: Float, speed: Float, seed: Int):
+    scatter(pos, vel, col, total, hx, hy, hz, r, speed, seed)
+
+@native
+fn integrate_native(pos, vel, n: Int, dt: Float, hx: Float, hy: Float, hz: Float, r: Float):
+    integrate(pos, vel, n, dt, hx, hy, hz, r)
+
+@native
+fn recover_native(col, home, n: Int, k: Float):
+    recover(col, home, n, k)
+
+@native
+fn build_grid_native(pos, n: Int, cell_of, counts, starts, cursor, sorted,
+                     hx: Float, hy: Float, hz: Float, cell: Float, gx: Int, gy: Int, gz: Int):
+    build_grid(pos, n, cell_of, counts, starts, cursor, sorted, hx, hy, hz, cell, gx, gy, gz)
+
+@native
+fn collide_native(pos, vel, col, npos, nvel, ncol, n: Int, cell_of, counts, starts, sorted,
+                  gx: Int, gy: Int, gz: Int, r: Float, e: Float, mix: Float, mix_speed: Float) -> Int =
+    collide(pos, vel, col, npos, nvel, ncol, n, cell_of, counts, starts, sorted, gx, gy, gz, r, e, mix, mix_speed)
+
+# ---------- อวกาศ 1 ชุด ----------
+# ขนาดลูกปรับตามจำนวน ให้ความแน่นพอ ๆ กันทุกโหมด (5,000 ลูก = รัศมี 2.5 ซม.)
+fn ball_radius(total: Int) -> Length = 2.5[cm] * (5000.0 / total) ** (1.0 / 3.0)
+
+struct World:
+    total: Int
+    native: Bool
+    hx: Float
+    hy: Float
+    hz: Float
+    r: Float
+    cell: Float
+    gx: Int
+    gy: Int
+    gz: Int
+    n: Int
+    pos: Tensor
+    vel: Tensor
+    col: Tensor
+    home: Tensor
+    npos: Tensor
+    nvel: Tensor
+    ncol: Tensor
+    cell_of: Tensor
+    counts: Tensor
+    starts: Tensor
+    cursor: Tensor
+    sorted: Tensor
+
+# half_* = ครึ่งความกว้าง/สูง/ลึกของอวกาศ (หน้าเว็บส่งสัดส่วนจอมา ให้อวกาศเต็มจอพอดี)
+fn new_world(total: Int, native: Bool, half_x: Length, half_y: Length, half_z: Length, seed: Int = 0) -> World:
+    let r = ball_radius(total).value
+    let hx = half_x.value
+    let hy = half_y.value
+    let hz = half_z.value
+    let cell = 2 * r
+    let gx = int(ceil(2 * hx / cell))
+    let gy = int(ceil(2 * hy / cell))
+    let gz = int(ceil(2 * hz / cell))
+    let ncell = gx * gy * gz
+    let w = World(total, native, hx, hy, hz, r, cell, gx, gy, gz, total,
+        zeros(total, 3), zeros(total, 3), zeros(total, 3), zeros(total, 3), zeros(total, 3), zeros(total, 3), zeros(total, 3),
+        zeros(total, dtype="int64"), zeros(ncell, dtype="int64"), zeros(ncell, dtype="int64"),
+        zeros(ncell, dtype="int64"), zeros(total, dtype="int64"))
+    scatter_native(w.pos, w.vel, w.col, total, hx, hy, hz, r, DRIFT_SPEED.value, seed)
+    w.home = w.col * 1.0                              # จำแม่สีเดิมของแต่ละลูก (สำเนา ไม่ใช่ตัวเดียวกัน)
+    return w
+
+# เดิน 1 เฟรม (frame_dt แบ่งเป็น substeps ช่วงย่อย) · คืนจำนวนครั้งที่ชน
+fn step(w: World, frame_dt: Time, substeps: Int) -> Int:
+    let dt = (frame_dt / substeps).value
+    let ms = MIX_SPEED.value
+    let back = min(RECOVER * frame_dt / substeps, 1.0)     # [1/s] × [s] = ตัวเลขเปล่า (ตัวตรวจหน่วยยืนยันให้)
+    var hits = 0
+    for s in 0..substeps:
+        if w.native:
+            recover_native(w.col, w.home, w.n, back)
+            integrate_native(w.pos, w.vel, w.n, dt, w.hx, w.hy, w.hz, w.r)
+            build_grid_native(w.pos, w.n, w.cell_of, w.counts, w.starts, w.cursor, w.sorted, w.hx, w.hy, w.hz, w.cell, w.gx, w.gy, w.gz)
+            hits += collide_native(w.pos, w.vel, w.col, w.npos, w.nvel, w.ncol, w.n, w.cell_of, w.counts, w.starts, w.sorted,
+                w.gx, w.gy, w.gz, w.r, RESTITUTION, MIX_RATE, ms)
+        else:
+            recover(w.col, w.home, w.n, back)
+            integrate(w.pos, w.vel, w.n, dt, w.hx, w.hy, w.hz, w.r)
+            build_grid(w.pos, w.n, w.cell_of, w.counts, w.starts, w.cursor, w.sorted, w.hx, w.hy, w.hz, w.cell, w.gx, w.gy, w.gz)
+            hits += collide(w.pos, w.vel, w.col, w.npos, w.nvel, w.ncol, w.n, w.cell_of, w.counts, w.starts, w.sorted,
+                w.gx, w.gy, w.gz, w.r, RESTITUTION, MIX_RATE, ms)
+        # ชุดใหม่กลายเป็นชุดปัจจุบัน (สลับที่ ไม่ก๊อปข้อมูล)
+        let tp = w.pos
+        w.pos = w.npos
+        w.npos = tp
+        let tv = w.vel
+        w.vel = w.nvel
+        w.nvel = tv
+        let tc = w.col
+        w.col = w.ncol
+        w.ncol = tc
+    return hits
