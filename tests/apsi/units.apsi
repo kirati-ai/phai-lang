@@ -53,3 +53,11 @@ test "typed functions accept the right dimension":
 test "unit type annotations":
     fn speed(d: [m], t: [s]) -> [m/s] = d / t
     assert speed(100m, 10s) == 10[m/s]
+
+test "astronomy prefixes on pc and yr":
+    assert 1[kpc] ~= 1000[pc]
+    assert 1[Mpc] ~= 1e6[pc]
+    assert 1[Myr] ~= 1e6[yr]
+    assert 13.8[Gyr] ~= 1.38e10[yr]
+    assert dim(1[kpc] / 1[Myr]) == "Velocity"
+    assert abs((1[kpc] / 1[Myr] as [km/s]).magnitude - 977.79) < 0.01

@@ -114,7 +114,8 @@ UNITS = {
     "kn": (1852.0 / 3600.0, D(m=1, s=-1)), "rpm": (2 * math.pi / 60, D(s=-1)),
 }
 PREFIXABLE = {"m", "g", "s", "A", "K", "mol", "cd", "Hz", "N", "Pa", "J", "W", "Wh", "C", "V",
-              "F", "ohm", "Ω", "S", "Wb", "T", "H", "eV", "L", "bar", "rad"}
+              "F", "ohm", "Ω", "S", "Wb", "T", "H", "eV", "L", "bar", "rad",
+              "pc", "yr"}   # astronomy: kpc, Mpc, Gpc · kyr, Myr, Gyr
 PREFIXES = {"Y": 1e24, "Z": 1e21, "E": 1e18, "P": 1e15, "T": 1e12, "G": 1e9, "M": 1e6,
             "k": 1e3, "h": 1e2, "da": 1e1, "d": 1e-1, "c": 1e-2, "m": 1e-3, "u": 1e-6,
             "µ": 1e-6, "μ": 1e-6, "n": 1e-9, "p": 1e-12, "f": 1e-15, "a": 1e-18}

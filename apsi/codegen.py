@@ -871,6 +871,8 @@ class CodeGen:
                 if not n.startswith("_"):
                     b = self.declare(scope, n)
                     self.emit(f"{b.py} = {tmp}[{n!r}]")
+                    if isinstance(st, A.StructDef):            # so `fn f(b: Box)` can name an imported struct
+                        self.emit(f"{HELPER_PREFIX}register_struct({n!r}, {b.py})")
 
     def s_Test(self, s, scope):
         fname = self.fresh("test")
@@ -1630,6 +1632,11 @@ class Runtime:
         self.structs[name] = st
         return st
 
+    def register_struct(self, name, st):
+        """Make a struct imported from another file usable in type annotations of this one."""
+        if isinstance(st, StructType):
+            self.structs.setdefault(name, st)            # a struct defined here under the same name wins
+
     def _fast_constructor(self, st):
         """A StructType subclass whose call builds the instance directly when every field is given by position and
         every field type is absent, Int or Float (scalars need no shape bindings); anything else goes the general
@@ -2031,6 +2038,7 @@ class Compiled:
             f"{HELPER_PREFIX}Namespace": Namespace,
             f"{HELPER_PREFIX}import_file": lambda p: interp.import_compiled(p),
             f"{HELPER_PREFIX}struct": rt.struct, f"{HELPER_PREFIX}shape_bind": rt.shape_bind,
+            f"{HELPER_PREFIX}register_struct": rt.register_struct,
             f"{HELPER_PREFIX}evolve": rt.evolve,
             f"{HELPER_PREFIX}add_test": lambda name, fn, line: tests.append((name, fn, line)),
         })

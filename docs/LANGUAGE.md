@@ -727,7 +727,7 @@ direct attribute access, `^` as exclusive or. `apsi convert` writes it at the to
 - inside brackets: `*`, `·` or a space multiply, `/` divides, `^` or `**` raise to a power (negative and fractional
   powers allowed: `^-1`, `^(1/2)`), and superscripts `² ³ ⁻¹` work
 - `u.<unit>` is one of that unit: `tensor([1, 2]) * u.km / u.h`, `x * u.eV`
-- **SI prefixes** work on base and derived units: Y Z E P T G M k h da d c m u/µ n p f a — `km`, `µs`, `MeV`, `kWh`, `GPa`, `mmol`
+- **SI prefixes** work on base and derived units: Y Z E P T G M k h da d c m u/µ n p f a — `km`, `µs`, `MeV`, `kWh`, `GPa`, `mmol`, and on `pc` and `yr` for astronomy — `kpc`, `Mpc`, `Myr`, `Gyr`
 
 ### 10.2 Available units
 

@@ -474,7 +474,8 @@ class App:
         if req.method not in ("GET", "HEAD"):
             return None
         for prefix, root in self.static_dirs:
-            if req.path == prefix or req.path.startswith(prefix + "/"):
+            # prefix "/" must match every path: "/" + "/" would be "//", which no request path starts with
+            if req.path == prefix or req.path.startswith(prefix.rstrip("/") + "/"):
                 rel = req.path[len(prefix):].lstrip("/") or "index.html"
                 full = os.path.realpath(os.path.join(root, unquote(rel)))
                 if not (full == root or full.startswith(root + os.sep)):

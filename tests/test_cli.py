@@ -164,6 +164,23 @@ class CommandLine(TempDir):
         self.assertEqual(rc, 1)
         self.assertIn("circular import", err)
 
+    def test_imported_struct_as_type_annotation(self):
+        lib, main = os.path.join(self.dir, "shapes.apsi"), os.path.join(self.dir, "use_shapes.apsi")
+        with open(lib, "w", encoding="utf-8") as fh:
+            fh.write("struct Box:\n    w: Float\n\nfn make(w: Float) -> Box = Box(w)\n")
+        with open(main, "w", encoding="utf-8") as fh:
+            fh.write('import "shapes.apsi"\n'
+                     "fn area(b: Box) -> Float = b.w * b.w\n"
+                     "fn grow(b: Box) -> Box = make(b.w * 2)\n"
+                     "print(area(grow(make(3.0))))\n"
+                     "print(area(4.0))\n")
+        for engine in ("compile", "interp"):
+            rc, out, err = apsi(main, "--engine", engine)
+            self.assertIn("36.0", out, err[-500:])
+            self.assertEqual(rc, 1)
+            self.assertIn("must be a Box, got Float", err)
+            self.assertNotIn("unknown type", err)
+
     @unittest.skipIf(os.name == "nt", "POSIX signals")
     def test_ctrl_c_stops_a_running_program(self):
         p = os.path.join(self.dir, "loop.apsi")

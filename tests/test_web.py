@@ -127,5 +127,30 @@ class WebServer(unittest.TestCase):
         self.assertEqual(sum(res), 300 * 20)
 
 
+class StaticAtRoot(unittest.TestCase):
+    """app.static("/", dir) serves the whole site, and routes still win over files."""
+
+    def test_root_prefix(self):
+        tmp = tempfile.mkdtemp()
+        os.makedirs(os.path.join(tmp, "www", "css"))
+        with open(os.path.join(tmp, "www", "index.html"), "w") as fh:
+            fh.write("<h1>home</h1>")
+        with open(os.path.join(tmp, "www", "css", "site.css"), "w") as fh:
+            fh.write("body{}")
+        with open(os.path.join(tmp, "www", "health"), "w") as fh:
+            fh.write("file, not the route")
+        with open(os.path.join(tmp, "secret.txt"), "w") as fh:
+            fh.write("secret")
+        src = ('use web\nlet app = server(name="root", log=false)\napp.health()\n'
+               f'app.static("/", {os.path.join(tmp, "www")!r})\n').replace("'", '"')
+        app = Interpreter(permissions={"fs", "net"}).run(src, "<static-root>").vars["app"]
+        self.assertEqual(app.handle("GET", "/").status, 200)
+        self.assertEqual(app.handle("GET", "/index.html").status, 200)
+        self.assertEqual(app.handle("GET", "/css/site.css").status, 200)
+        self.assertEqual(app.handle("GET", "/health").body["status"], "ok")      # the route, not the file
+        self.assertIn(app.handle("GET", "/../secret.txt").status, (403, 404))
+        self.assertEqual(app.handle("GET", "/missing.js").status, 404)
+
+
 if __name__ == "__main__":
     unittest.main()
