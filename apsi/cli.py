@@ -720,21 +720,31 @@ def _glue_flag_values(argv):
     return out
 
 
+def command_name():
+    """"phai" when started as `phai` (phai.bat / phai.sh set APSI_PROG; the pip-installed phai.exe is named so),
+    otherwise "apsi". Only the name shown in help and messages changes; the language is the same."""
+    name = os.environ.get("APSI_PROG") or os.path.splitext(os.path.basename(sys.argv[0] or ""))[0]
+    return "phai" if name.lower() == "phai" else "apsi"
+
+
 def _parser(light=False):
     """The argument parser of every command (also used by programs built with `apsi build`). light=True builds
     only `run` (and its flags): starting a program does not import the code of the other commands."""
+    prog = command_name()
     ap = argparse.ArgumentParser(
-        prog="apsi", formatter_class=argparse.RawDescriptionHelpFormatter,
+        prog=prog, formatter_class=argparse.RawDescriptionHelpFormatter,
         description="The Apsi language toolchain.",
-        epilog="shortcuts:\n"
+        epilog=("shortcuts:\n"
                "  apsi                     start the REPL (or run a program piped on stdin)\n"
                "  apsi FILE.apsi [ARGS]    run a program\n"
                "  apsi -e \"CODE\"           evaluate code and print the result\n"
                "  apsi TASK                run a task from apsi.toml\n"
                "  apsi editors install     add Apsi to VS Code, Cursor, Windsurf, Sublime, Vim/Neovim, Notepad++\n"
                "  apsi convert app.py      translate Python (numpy, math, torch, …) into Apsi\n\n"
-               "docs: docs/LANGUAGE.md — the complete language reference (chapter 24: every command)")
-    ap.add_argument("-V", "--version", action="version", version=f"Apsi {__version__}")
+               "docs: docs/LANGUAGE.md — the complete language reference (chapter 24: every command)"
+               ).replace("\n  apsi", f"\n  {prog}"))
+    version = f"Apsi {__version__}" if prog == "apsi" else f"Phai Lang {__version__} (based on Apsi {__version__} by ATEC)"
+    ap.add_argument("-V", "--version", action="version", version=version)
     sub = ap.add_subparsers(dest="cmd", metavar="COMMAND")
 
     def perm_flags(p):

@@ -164,6 +164,18 @@ class CommandLine(TempDir):
         self.assertEqual(rc, 1)
         self.assertIn("circular import", err)
 
+    def test_phai_command_name(self):
+        env = dict(ENV, APSI_PROG="phai")
+        out = subprocess.run([sys.executable, "-m", "apsi", "--version"], env=env, capture_output=True, text=True).stdout
+        self.assertIn("Phai Lang", out)
+        self.assertIn("based on Apsi", out)                       # credit required by the Apsi License 5.2
+        helptext = subprocess.run([sys.executable, "-m", "apsi", "--help"], env=env, capture_output=True, text=True).stdout
+        self.assertTrue(helptext.startswith("usage: phai"))
+        self.assertNotIn("\n  apsi ", helptext)
+        plain_env = {k: v for k, v in ENV.items() if k != "APSI_PROG"}
+        plain = subprocess.run([sys.executable, "-m", "apsi", "--version"], env=plain_env, capture_output=True, text=True).stdout
+        self.assertTrue(plain.startswith("Apsi "))
+
     def test_imported_struct_as_type_annotation(self):
         lib, main = os.path.join(self.dir, "shapes.apsi"), os.path.join(self.dir, "use_shapes.apsi")
         with open(lib, "w", encoding="utf-8") as fh:

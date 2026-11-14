@@ -20,6 +20,7 @@ web = ["uvloop; sys_platform != \"win32\""]
 
 [project.scripts]
 apsi = "apsi.cli:main"
+phai = "apsi.cli:main"     # Phai Lang: the same toolchain under its own command name
 
 [tool.setuptools]
 packages = ["apsi", "apsi.native"]

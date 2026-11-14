@@ -8,10 +8,19 @@ Apsi License 2.0 (see [`LICENSE`](LICENSE)). Phai Lang is not the official Apsi 
 - `app.static("/", dir)` serves a whole site from the root path (it never matched before)
 - SI prefixes on `pc` and `yr`: `kpc`, `Mpc`, `Myr`, `Gyr`
 - a struct brought in with `import "file.apsi"` can be named in type annotations (`fn f(b: Box)`)
+- the `phai` command: `phai.bat` / `./phai.sh` (they use this folder's `.venv` when it exists), and `phai`
+  after `pip install -e .`
 - demos in [`construction/`](construction): room material calculator, room 3D viewer, colour-mixing balls in
   space, colliding galaxies (all with three.js)
 
-The command is still `apsi` and the rest of this README is the original Apsi documentation.
+```
+phai run examples/01_hello.apsi
+phai --version        # Phai Lang 2.6.0 (based on Apsi 2.6.0 by ATEC)
+```
+
+`apsi` still works as before, programs keep the `.apsi` extension, and the Python package is still `apsi`, so
+updates from ATEC can be merged. The rest of this README is the original Apsi documentation: wherever it says
+`apsi`, `phai` works too.
 
 ---
 
